@@ -46,6 +46,12 @@ class H(http.server.BaseHTTPRequestHandler):
             self.end_headers()
         elif path == "/target":
             self._send(200, b"target body reached")
+        elif path == "/set-cookie":
+            self._send(200, b"cookie set", headers=[
+                ("Set-Cookie", "sid=abc123; Path=/")])
+        elif path == "/whoami":
+            cookie = self.headers.get("Cookie") or "(none)"
+            self._send(200, b"cookie: " + cookie.encode())
         elif path == "/download/data.txt":
             self._send(200, b"file contents here", headers=[
                 ("Content-Disposition", 'attachment; filename="saved.txt"')])

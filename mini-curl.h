@@ -37,6 +37,7 @@ typedef struct {
     int remote_name;            // -O/--remote-name
     int resume;                 // -C/--continue-at given
     long resume_offset;         // -1 = auto (from file size), else explicit
+    const char *cook_file;      // --cook FILE, cookie jar file (read + save)
     long connect_timeout_ms;    // --connect-timeout, -1 if unset
     int connect_timeout_set;
     int max_redirs;

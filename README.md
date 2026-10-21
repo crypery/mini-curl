@@ -21,6 +21,7 @@ The client works with both plain HTTP and HTTPS (TLS 1.2/1.3). All cryptographic
 - Custom headers (`-H`), POST data (`-d`), multipart/form-data (`-F`)
 - Saving the response to a file (`-o`, `-O`)
 - Resuming interrupted transfers via Range requests (`-C`)
+- Cookie jar persisted to a file across runs (`--cook`)
 - Connection timeout (`--connect-timeout`)
 - Verbose mode (`-v`), silent mode (`-s`), disabling certificate verification (`-k`)
 - Chunked transfer encoding decoding
@@ -76,7 +77,8 @@ Options:
  -s, --silent             Silent mode. Don't output anything
      --connect-timeout SECONDS  Maximum time allowed for connection
      --max-redirs NUM     Maximum number of redirects allowed (default 50)
- -h, --help               This help text
+     --cook FILE          Read cookies from FILE and save updated cookies back
+  -h, --help               This help text
      --version            Show version information and exit
 ```
 
@@ -106,6 +108,11 @@ mini-curl.exe -v https://example.com
 
 :: 5-second connection timeout
 mini-curl.exe --connect-timeout 5 https://example.com
+
+:: Cookie jar: cookies are saved to cookies.txt after the first request
+:: and picked up from the file on the next run (Cookie header is sent)
+mini-curl.exe --cook cookies.txt https://example.com/login
+mini-curl.exe --cook cookies.txt https://example.com/profile
 ```
 
 ### Testing
@@ -117,4 +124,4 @@ python test_server.py 8765
 mini-curl.exe -v http://127.0.0.1:8765/
 ```
 
-The server supports the following scenarios: plain GET, chunked responses, redirects, file download, Range requests (transfer resumption).
+The server supports the following scenarios: plain GET, chunked responses, redirects, file download, Range requests (transfer resumption), cookies (`/set-cookie`, `/whoami`).

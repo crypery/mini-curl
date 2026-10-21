@@ -235,6 +235,69 @@ static void test_parse_options(void) {
     CHECK(o.verbose, "verbose after URL");
     CHECK_STR(o.outfile, "out.txt", "outfile after URL");
     CHECK_STR(url_header_get(&o.user_headers, "x-z"), "9", "header after URL");
+
+    char *a8[] = { "mini-curl", "--cook", "cookies.txt", "http://x" };
+    idx = -1;
+    CHECK(parse_options(4, a8, &o, &idx) == 0, "cook option parsed");
+    CHECK_STR(o.cook_file, "cookies.txt", "cook file value");
+    CHECK_EQ_INT(idx, 3, "cook url index");
+
+    char *a9[] = { "mini-curl", "--cook=jar.txt", "http://x" };
+    idx = -1;
+    CHECK(parse_options(3, a9, &o, &idx) == 0, "cook inline form");
+    CHECK_STR(o.cook_file, "jar.txt", "cook inline value");
+}
+
+static void test_cookies(void) {
+    printf("[cookie jar]\n");
+
+    url_cookie_set_from_url("http://example.com/login", "sid=abc; Path=/");
+    char *ck = url_cookie_header_for("http://example.com/profile");
+    CHECK(ck != NULL, "cookie applies to same host");
+    CHECK_STR(ck, "sid=abc", "cookie header value");
+    free(ck);
+
+    char *ck2 = url_cookie_header_for("http://other.com/x");
+    CHECK(ck2 == NULL, "no cross-host leak");
+    free(ck2);
+
+    url_cookie_set_from_url("http://example.com/x", "sid=; Max-Age=0");
+    char *ck3 = url_cookie_header_for("http://example.com/y");
+    CHECK(ck3 == NULL, "deleted cookie not sent");
+    free(ck3);
+
+    url_cookie_set_from_url("https://example.com/secure", "sec=1; Secure; Path=/");
+    char *ck4 = url_cookie_header_for("http://example.com/secure");
+    CHECK(ck4 == NULL, "secure cookie not sent over http");
+    free(ck4);
+    char *ck5 = url_cookie_header_for("https://example.com/secure");
+    CHECK(ck5 && contains(ck5, "sec=1"), "secure cookie sent over https");
+    free(ck5);
+
+    url_cookie_set_from_url("http://example.com/a", "tok=xyz; Path=/");
+    url_cookie_save("test_cookies.txt");
+    int found = 0;
+    FILE *f = fopen("test_cookies.txt", "r");
+    CHECK(f != NULL, "jar file created");
+    if (f) {
+        char line[512];
+        while (fgets(line, sizeof(line), f))
+            if (strstr(line, "tok\t") && strstr(line, "xyz")) found = 1;
+        fclose(f);
+    }
+    CHECK(found, "jar file contains cookie");
+
+    f = fopen("test_cookies.txt", "w");
+    CHECK(f != NULL, "jar file rewritten");
+    if (f) {
+        fputs("example.com\t/\tnewck\tv1\t0\t0\n", f);
+        fclose(f);
+    }
+    url_cookie_load("test_cookies.txt");
+    char *ck6 = url_cookie_header_for("http://example.com/z");
+    CHECK(ck6 && contains(ck6, "newck=v1"), "loaded cookie sent");
+    free(ck6);
+    remove("test_cookies.txt");
 }
 
 static void test_choose_method(void) {
@@ -411,6 +474,7 @@ int main(void) {
     test_disposition();
     test_remote_name();
     test_headers();
+    test_cookies();
     test_build_request();
 
     if (g_fail) {

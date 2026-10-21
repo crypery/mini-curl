@@ -8,7 +8,8 @@
  * mini-curl.c - curl-like HTTP/HTTPS command-line client
  *
  * A self-contained HTTP/HTTPS client with a curl-like interface.
- * Supports: -X/-I/-L, -H/-d/-F, -o/-O/-C, -v/-k/-s, --connect-timeout.
+ * Supports: -X/-I/-L, -H/-d/-F, -o/-O/-C, -v/-k/-s, --connect-timeout,
+ * --cook.
  *
  * Features:
  *   - HTTP/1.1 with persistent connection close
@@ -18,6 +19,7 @@
  *   - Multipart form data uploads (-F)
  *   - Range requests / resume (-C)
  *   - Custom headers (-H)
+ *   - Cookie jar persisted to a file across runs (--cook)
  *
  * The actual HTTP/HTTPS work is done by the url library (url.c / url.h):
  *
@@ -182,6 +184,10 @@ int parse_options(int argc, char **argv, Options *o, int *url_idx) {
                     return -1;
                 }
                 o->max_redirs = (int)n;
+            } else if (strcmp(name, "cook") == 0) {
+                val = opt_need_value(argc, argv, &i, val);
+                if (!val) return -1;
+                o->cook_file = val;
             } else {
                 fprintf(stderr, "curl: option --%s is unknown\n", name);
                 return -1;
@@ -307,9 +313,10 @@ static void print_help(FILE *f) {
         " -v, --verbose            Make the operation more talkative\n"
         " -k, --insecure           Allow insecure server connections when using SSL\n"
         " -s, --silent             Silent mode. Don't output anything\n"
-        "     --connect-timeout SECONDS  Maximum time allowed for connection\n"
-        "     --max-redirs NUM     Maximum number of redirects allowed (default %d)\n"
-        " -h, --help               This help text\n"
+         "     --connect-timeout SECONDS  Maximum time allowed for connection\n"
+         "     --max-redirs NUM     Maximum number of redirects allowed (default %d)\n"
+         "     --cook FILE          Read cookies from FILE and save updated cookies back\n"
+         " -h, --help               This help text\n"
         "     --version            Show version information and exit\n",
         URL_MAX_REDIRS);
 }
@@ -381,6 +388,13 @@ int main(int argc, char *argv[]) {
     if (o.user_agent[0]) url_set_user_agent(ctx, o.user_agent);
     for (int i = 0; i < o.user_headers.n; i++)
         url_set_header(ctx, o.user_headers.h[i].name, o.user_headers.h[i].value);
+
+    // Cookie jar: load from the file on the first url_run() (if it exists)
+    // and save back on every Set-Cookie received.
+    if (o.cook_file) {
+        ctx->use_cook = true;
+        ctx->cook_file = (char *)o.cook_file;
+    }
 
     char method[16];
     choose_method(&o, method, sizeof(method));

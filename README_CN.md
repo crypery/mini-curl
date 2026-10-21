@@ -21,6 +21,7 @@
 - 自定义请求头（`-H`）、POST 数据（`-d`）、multipart/form-data（`-F`）
 - 将响应保存到文件（`-o`、`-O`）
 - 通过 Range 请求恢复中断的下载（`-C`）
+- 持久化到文件的 Cookie 存储（`--cook`）
 - 连接超时（`--connect-timeout`）
 - 详细模式（`-v`）、静默模式（`-s`）、禁用证书校验（`-k`）
 - chunked 传输编码解码
@@ -76,7 +77,8 @@ Options:
  -s, --silent             Silent mode. Don't output anything
      --connect-timeout SECONDS  Maximum time allowed for connection
      --max-redirs NUM     Maximum number of redirects allowed (default 50)
- -h, --help               This help text
+     --cook FILE          Read cookies from FILE and save updated cookies back
+  -h, --help               This help text
      --version            Show version information and exit
 ```
 
@@ -106,6 +108,10 @@ mini-curl.exe -v https://example.com
 
 :: 连接超时 5 秒
 mini-curl.exe --connect-timeout 5 https://example.com
+
+:: Cookie：首次请求后保存到 cookies.txt，下次运行自动从文件读取（发送 Cookie 头）
+mini-curl.exe --cook cookies.txt https://example.com/login
+mini-curl.exe --cook cookies.txt https://example.com/profile
 ```
 
 ### 测试
@@ -117,4 +123,4 @@ python test_server.py 8765
 mini-curl.exe -v http://127.0.0.1:8765/
 ```
 
-服务器支持以下场景：普通 GET、chunked 响应、重定向、文件下载、Range 请求（恢复下载）。
+服务器支持以下场景：普通 GET、chunked 响应、重定向、文件下载、Range 请求（恢复下载）、Cookie（`/set-cookie`、`/whoami`）。

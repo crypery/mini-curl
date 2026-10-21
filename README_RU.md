@@ -21,6 +21,7 @@
 - Пользовательские заголовки (`-H`), POST-данные (`-d`), multipart/form-data (`-F`)
 - Сохранение ответа в файл (`-o`, `-O`)
 - Возобновление прерванной загрузки через Range-запросы (`-C`)
+- Хранилище кукис с сохранением в файл между запусками (`--cook`)
 - Таймаут установления соединения (`--connect-timeout`)
 - Подробный (verbose) режим (`-v`), тихий режим (`-s`), отключение проверки сертификата (`-k`)
 - Декодирование chunked transfer encoding
@@ -76,7 +77,8 @@ Options:
  -s, --silent             Silent mode. Don't output anything
      --connect-timeout SECONDS  Maximum time allowed for connection
      --max-redirs NUM     Maximum number of redirects allowed (default 50)
- -h, --help               This help text
+     --cook FILE          Read cookies from FILE and save updated cookies back
+  -h, --help               This help text
      --version            Show version information and exit
 ```
 
@@ -106,6 +108,11 @@ mini-curl.exe -v https://example.com
 
 :: Таймаут соединения 5 секунд
 mini-curl.exe --connect-timeout 5 https://example.com
+
+:: Куки: после первого запроса кукисы сохраняются в cookies.txt,
+:: а при следующем запуске подхватываются из файла (уходит заголовок Cookie)
+mini-curl.exe --cook cookies.txt https://example.com/login
+mini-curl.exe --cook cookies.txt https://example.com/profile
 ```
 
 ### Тестирование
@@ -117,4 +124,4 @@ python test_server.py 8765
 mini-curl.exe -v http://127.0.0.1:8765/
 ```
 
-Сервер поддерживает сценарии: обычный GET, chunked-ответы, редиректы, загрузка файла, Range-запросы (возобновление загрузки).
+Сервер поддерживает сценарии: обычный GET, chunked-ответы, редиректы, загрузка файла, Range-запросы (возобновление загрузки), кукис (`/set-cookie`, `/whoami`).
