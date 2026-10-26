@@ -44,6 +44,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 // Get option value from inline string or next argument
 static const char *opt_need_value(int argc, char **argv, int *i, const char *inlinev) {
     if (inlinev && *inlinev) return inlinev;
@@ -349,6 +354,10 @@ static void log_line(const char *fmt, ...) {
 }
 
 int main(int argc, char *argv[]) {
+#ifdef _WIN32
+    /* stdout may carry raw downloaded bytes: disable CRLF translation */
+    _setmode(_fileno(stdout), _O_BINARY);
+#endif
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_help(stdout);
@@ -454,38 +463,53 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Run the request through the url library.
+    // Output to a file: download straight to disk through the url library
+    // (bodies up to 10 MB keep the classic in-memory path, larger ones are
+    // streamed to the file chunk by chunk - nothing is printed to the
+    // console).
+    if (o.outfile || o.remote_name) {
+        char outpath[1024];
+        UrlInfo u;
+        if (o.outfile) {
+            snprintf(outpath, sizeof(outpath), "%s", o.outfile);
+        } else if (url_parse(url, &u) == 0) {
+            url_remote_name(&u, NULL, outpath, sizeof(outpath));
+        } else {
+            snprintf(outpath, sizeof(outpath), "index.html");
+        }
+        size_t saved = 0;
+        int rc = url_download_file(ctx, url, outpath, log_line, &saved);
+        int st = url_status(ctx);
+        int result = (rc == 0 && st >= 200 && st < 300) ? 0 : 1;
+        if (result == 0) {
+            /* -O: honor a Content-Disposition name different from the URL one */
+            if (o.remote_name && !o.outfile) {
+                const char *cd = url_response_header(ctx, "content-disposition");
+                UrlInfo u2;
+                char named[1024];
+                if (cd && url_parse(url, &u2) == 0 &&
+                    url_remote_name(&u2, cd, named, sizeof(named)) == 0 &&
+                    strcmp(named, outpath) != 0) {
+                    if (rename(outpath, named) != 0) {
+                        remove(named);
+                        rename(outpath, named);
+                    }
+                }
+            }
+            if (o.verbose) fprintf(stderr, "* Saved %llu bytes to %s\n",
+                                   (unsigned long long)saved, outpath);
+        }
+        url_free(ctx);
+        return result;
+    }
+
+    // Run the request through the url library (body to the console).
     char *data = url_run(ctx, url, method, log_line);
     int result = 1;
-    if (!data) {
-        result = 1;
-    } else {
+    if (data) {
         size_t data_len = ctx->result_len;
-        if (o.outfile || o.remote_name) {
-            char outpath[1024];
-            if (o.outfile) {
-                snprintf(outpath, sizeof(outpath), "%s", o.outfile);
-            } else {
-                UrlInfo u;
-                if (url_parse(url, &u) == 0)
-                    url_remote_name(&u, url_response_header(ctx, "content-disposition"),
-                                    outpath, sizeof(outpath));
-                else
-                    snprintf(outpath, sizeof(outpath), "index.html");
-            }
-            int append = (o.resume && url_status(ctx) == 206);
-            FILE *fp = fopen(outpath, append ? "ab" : "wb");
-            if (!fp) {
-                if (!o.silent) fprintf(stderr, "curl: (23) failed to open file '%s'\n", outpath);
-            } else {
-                if (data_len > 0) fwrite(data, 1, data_len, fp);
-                fclose(fp);
-                if (o.verbose) fprintf(stderr, "* Saved output to %s\n", outpath);
-            }
-        } else {
-            if (data_len > 0) fwrite(data, 1, data_len, stdout);
-            fflush(stdout);
-        }
+        if (data_len > 0) fwrite(data, 1, data_len, stdout);
+        fflush(stdout);
         int st = url_status(ctx);
         result = (st >= 200 && st < 300) ? 0 : 1;
         free(data);

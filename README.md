@@ -19,7 +19,8 @@ The client works with both plain HTTP and HTTPS (TLS 1.2/1.3). All cryptographic
 - Arbitrary request method (`-X`), HEAD requests (`-I`)
 - Automatic redirect following (`-L`) with a configurable limit (`--max-redirs`)
 - Custom headers (`-H`), POST data (`-d`), multipart/form-data (`-F`)
-- Saving the response to a file (`-o`, `-O`)
+- Saving the response to a file (`-o`, `-O`): bodies up to 10 MB are fetched the classic way (into memory), larger (or size-unknown / chunked) bodies are streamed to disk chunk by chunk - multi-gigabyte files do not need to fit in RAM and are never printed to the console
+- Per-chunk I/O limits on downloads: every read gets a fresh timeout window and a temporary network stall does not abort the transfer; only a fully silent (dead) link times out
 - Resuming interrupted transfers via Range requests (`-C`)
 - Cookie jar persisted to a file across runs (`--cook`)
 - Connection timeout (`--connect-timeout`)
@@ -34,7 +35,7 @@ The client works with both plain HTTP and HTTPS (TLS 1.2/1.3). All cryptographic
 
 - **crypery/tls** - the base cryptographic layer: a pure C implementation of TLS 1.2/1.3 (AES-128-GCM, SHA-256, HMAC-SHA256, HKDF, RSA-2048, ECDH P-256/X25519, X.509 certificates).
 - **crypery/ssl** - an OpenSSL-compatible API layer over the built-in TLS implementation: handshake, encrypted I/O over a socket, timeouts, certificate verification.
-- **crypery/url** - the HTTP/HTTPS client library: URL parsing, HTTP/1.1 requests, response reading (Content-Length, chunked), redirects, multipart forms, DNS resolution, connection with timeout.
+ - **crypery/url** - the HTTP/HTTPS client library: URL parsing, HTTP/1.1 requests, response reading (Content-Length, chunked), redirects, multipart forms, file downloads to disk (`url_download_file()`: streamed chunk by chunk for large bodies, per-chunk I/O limits, resume via Range/206), DNS resolution, connection with timeout.
 - **zlib** - an optional library for gzip decompression of compressed responses.
 
 ## Building
@@ -51,9 +52,9 @@ The script compiles all sources (zlib, crypery, mini-curl.c) with `-O2` optimiza
 
 Equivalent manual command:
 
-```bat
-gcc -O2 -o mini-curl.exe -I. -I./zlib -I./crypery./zlib/*.c./crypery/*.c mini-curl.c -lws2_32 -lz
-```
+ ```bat
+ gcc -O2 -o mini-curl.exe -I. -I./zlib -I./crypery ./zlib/*.c ./crypery/*.c mini-curl.c -lws2_32 -lz
+ ```
 
 On Unix-like systems the `-lws2_32` flag is not needed.
 
@@ -100,11 +101,18 @@ mini-curl.exe -d "name=value" https://httpbin.org/post
 :: Custom header
 mini-curl.exe -H "X-Api-Key: 123" https://api.example.com
 
-:: Save the response to a file
-mini-curl.exe -o page.html https://example.com
-
-:: Verbose mode (output to stderr)
-mini-curl.exe -v https://example.com
+ :: Save the response to a file
+ mini-curl.exe -o page.html https://example.com
+ 
+ :: Download a large file: saved to disk, streamed chunk by chunk
+ :: (nothing is printed to the console), redirects are followed
+ mini-curl.exe -L -o model.gguf https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf
+ 
+ :: Resume an interrupted download (auto offset from the existing file)
+ mini-curl.exe -L -C - -o model.gguf https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf
+ 
+ :: Verbose mode (output to stderr, download progress included)
+ mini-curl.exe -v https://example.com
 
 :: 5-second connection timeout
 mini-curl.exe --connect-timeout 5 https://example.com

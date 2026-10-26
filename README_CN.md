@@ -19,7 +19,8 @@
 - 任意请求方法（`-X`）、HEAD 请求（`-I`）
 - 自动跟随重定向（`-L`），可配置上限（`--max-redirs`）
 - 自定义请求头（`-H`）、POST 数据（`-d`）、multipart/form-data（`-F`）
-- 将响应保存到文件（`-o`、`-O`）
+- 将响应保存到文件（`-o`、`-O`）：10 MB 以内的响应体按经典方式读取到内存，更大的（或大小未知 / chunked）响应体按块流式写入磁盘——数 GB 的文件无需全部放入内存，也绝不会打印到控制台
+- 下载时按数据块计 I/O 限制：每次读取都获得全新的超时窗口，网络短暂停顿不会中断传输；只有完全静默（死亡）的链路才会超时
 - 通过 Range 请求恢复中断的下载（`-C`）
 - 持久化到文件的 Cookie 存储（`--cook`）
 - 连接超时（`--connect-timeout`）
@@ -34,7 +35,7 @@
 
 - **crypery/tls** - 基础加密层：纯 C 实现的 TLS 1.2/1.3（AES-128-GCM、SHA-256、HMAC-SHA256、HKDF、RSA-2048、ECDH P-256/X25519、X.509 证书）。
 - **crypery/ssl** - 基于内置 TLS 实现的 OpenSSL 兼容 API 层：握手、套接字上的加密 I/O、超时、证书校验。
-- **crypery/url** - HTTP/HTTPS 客户端库：URL 解析、HTTP/1.1 请求、响应读取（Content-Length、chunked）、重定向、multipart 表单、DNS 解析、带超时的连接。
+ - **crypery/url** - HTTP/HTTPS 客户端库：URL 解析、HTTP/1.1 请求、响应读取（Content-Length、chunked）、重定向、multipart 表单、文件下载到磁盘（`url_download_file()`：大响应体按块流式写盘、按数据块计 I/O 限制、Range/206 断点续传）、DNS 解析、带超时的连接。
 - **zlib** - 可选库，用于 gzip 解压缩压缩后的响应。
 
 ## 编译
@@ -51,9 +52,9 @@ build_curl.bat
 
 等效的手动命令：
 
-```bat
-gcc -O2 -o mini-curl.exe -I. -I./zlib -I./crypery./zlib/*.c./crypery/*.c mini-curl.c -lws2_32 -lz
-```
+ ```bat
+ gcc -O2 -o mini-curl.exe -I. -I./zlib -I./crypery ./zlib/*.c ./crypery/*.c mini-curl.c -lws2_32 -lz
+ ```
 
 在类 Unix 系统上不需要 `-lws2_32` 参数。
 
@@ -100,11 +101,17 @@ mini-curl.exe -d "name=value" https://httpbin.org/post
 :: 自定义请求头
 mini-curl.exe -H "X-Api-Key: 123" https://api.example.com
 
-:: 将响应保存到文件
-mini-curl.exe -o page.html https://example.com
-
-:: 详细模式（输出到 stderr）
-mini-curl.exe -v https://example.com
+ :: 将响应保存到文件
+ mini-curl.exe -o page.html https://example.com
+ 
+ :: 下载大文件：保存到磁盘、按块流式传输（不向控制台输出任何内容），自动跟随重定向
+ mini-curl.exe -L -o model.gguf https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf
+ 
+ :: 续传中断的下载（根据已有文件自动确定偏移量）
+ mini-curl.exe -L -C - -o model.gguf https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf
+ 
+ :: 详细模式（输出到 stderr，包含下载进度）
+ mini-curl.exe -v https://example.com
 
 :: 连接超时 5 秒
 mini-curl.exe --connect-timeout 5 https://example.com
